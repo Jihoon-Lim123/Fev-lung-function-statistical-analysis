@@ -1,0 +1,241 @@
+---
+title: "STAT420_Project2"
+author: "Anand Vinod, Alan Jiang, Jihoon Lim"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(cowplot)
+```
+
+## 1. Two Sample Test
+
+### Objective
+Carry out a two sample test with significance level α = .05 to determine whether smoking decreases FEV in children.
+
+### Method
+Let \(  \mu_1 \) be the true mean FEV of children who smoke and let \( \mu_2 \) be the true mean FEV of children who do not smoke. The hypotheses are given by:
+\[
+\begin{aligned}
+H_0 &: \mu_1 \geq \mu_2 
+    && \text{(The mean FEV of children who smoke is greater than or equal to that of children who do not smoke.)} \\
+H_a &: \mu_1 < \mu_2 
+    && \text{(The mean FEV of children who smoke is less than that of children who do not smoke.)}
+\end{aligned}
+\]
+
+We now perform a two-sample t-test on the data to determine statistical significance.
+
+```{r cars}
+fev_data <- read.table("fev.txt", header = TRUE)
+
+
+# Check the fev for smokers, and nonsmokers
+smokers <- fev_data$fev[fev_data$smoke ==  1]
+non_smokers <- fev_data$fev[fev_data$smoke == 2]
+
+test_result <- t.test(smokers, non_smokers, alternative = "less", conf.level = 0.95)
+cat("p-value of test: ", test_result$p.value, "\n")
+```
+### Discussion
+
+Based on the two-sample t-test with significance level α=0.05, we fail to reject the null hypothesis that the mean FEV of smokers is greater than or equal to the mean FEV of non-smokers. The one-sided test produced a p-value of 1, indicating that the data provides no statistical evidence that smokers have lower FEV than non-smokers. In fact, the observed sample mean FEV for smokers is higher, likely due to differences in age or other confounding variables. Thus, in this unadjusted comparison, we cannot conclude that smoking decreases FEV in children.
+
+## 2. Finding Confounding Variables
+
+### Objective
+Check all the variables associated with smoking to see if they affect FEV using tables, box plots, and scatter plots.
+
+### Method
+Following the code examples in the linear regression slides, we created a table with the sample size, FEV, age, height, and sex based off of three groups: combined, smokers, and non-smokers. We used the format mean (sd) when there was one, or just proportion for sex. Next, we created box plots and scatter plots following the lecture examples.
+
+```{r variables}
+fev_data <- read.table("fev.txt", header = TRUE)
+
+sex <- ifelse(fev_data$sex==1,"Male","Female")
+fev_data$sex <- factor(sex)
+
+smoke <- ifelse(fev_data$smoke==1,"Yes","No")
+fev_data$smoke <- factor(smoke)
+
+#knitr::kable(summary(fev_data))
+#print("Whole data standard deviations")
+#cat("Age: ", sd(fev_data$age), "  FEV: ", sd(fev_data$fev,na.rm=TRUE), "  Height: ", sd(fev_data$height), "\n")
+
+fev_data.s <- fev_data[fev_data$smoke=="Yes",] ## smoking group
+fev_data.ns <- fev_data[fev_data$smoke=="No",] ## non-smoking group
+
+#knitr::kable(summary(fev_data.s))
+#print("Smokers standard deviations")
+#cat("Age: ", sd(fev_data.s$age), "  FEV: ", sd(fev_data.s$fev,na.rm=TRUE), "  Height: ", sd(fev_data.s$height), "\n")
+#knitr::kable(summary(fev_data.ns))
+#print("Non-Smokers standard deviations")
+#cat("Age: ", sd(fev_data.ns$age), "  FEV: ", sd(fev_data.ns$fev,na.rm=TRUE), "  Height: ", sd(fev_data.ns$height), "\n")
+
+table_data <- c(length(fev_data$age), length(fev_data.s$age), length(fev_data.ns$age),
+                sprintf("%g (%g)", round(mean(fev_data$fev,na.rm=TRUE), digits=2), round(sd(fev_data$fev,na.rm=TRUE), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.s$fev,na.rm=TRUE), digits=2), round(sd(fev_data.s$fev,na.rm=TRUE), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.ns$fev,na.rm=TRUE), digits=2), round(sd(fev_data.ns$fev,na.rm=TRUE), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data$age), digits=2), round(sd(fev_data$age), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.s$age), digits=2), round(sd(fev_data.s$age), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.ns$age), digits=2), round(sd(fev_data.ns$age), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data$height), digits=2), round(sd(fev_data$height), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.s$height), digits=2), round(sd(fev_data.s$height), digits=2)),
+                sprintf("%g (%g)", round(mean(fev_data.ns$height), digits=2), round(sd(fev_data.ns$height), digits=2)),
+                sprintf("%g%%", round(100 * as.numeric(prop.table(table(fev_data$sex))["Female"]), digits=2)), 
+                sprintf("%g%%", round(100 * as.numeric(prop.table(table(fev_data.s$sex))["Female"]), digits=2)),
+                sprintf("%g%%", round(100 * as.numeric(prop.table(table(fev_data.ns$sex))["Female"]), digits=2)))
+table <- matrix(table_data, nrow=5, ncol=3, byrow=TRUE)
+colnames(table) <- c("Combined", "Smoker", "Non-Smoker")
+rownames(table) <- c("Sample Size", "FEV (Liters per second)", "Age (Years)", "Height (Inches)", "Female (Percentage)")
+knitr::kable(table)
+
+```
+```{r plots1}
+#Plots
+library(ggplot2)
+p1 <- ggplot(fev_data, aes(x = age, y = fev)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  labs(title = "Scatter Plot of Age and FEV",
+    x = "Age",
+    y = "FEV")
+p2 <- ggplot(fev_data, aes( x= smoke, y = age)) +
+  geom_boxplot() +
+    labs(title = "Boxplot of Age by Smoking Status",
+    x = "Smoking",
+    y = "Age")
+cowplot::plot_grid(p1, p2, ncol=2)
+```
+
+### Discussion
+
+We determine that age is a confounding variable. From the scatter plot, as age increases, FEV also increases, meaning it has an effect on the outcome. From the box plot, smokers tend to be older, which means it has an association with exposure. This makes sense because as age increases, lung capacity increases, as the teens are an age of rapid growth for the body. Therefore, their lungs and their FEV will increase with age. 
+
+``` {r plots2}
+p1 <- ggplot(fev_data, aes(x = height, y = fev)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  labs(title = "Scatter Plot of Height and FEV",
+    x = "Height",
+    y = "FEV")
+p2 <- ggplot(fev_data, aes( x= smoke, y = height)) +
+  geom_boxplot() +
+    labs(title = "Boxplot of Height by Smoking Status",
+    x = "Smoking",
+    y = "Height")
+cowplot::plot_grid(p1, p2, ncol=2)
+```
+
+### Discussion
+
+We determine that height is also a confounding variable. From the scatter plot, as height increases, FEV also increases, meaning it has an effect on the outcome. In addition, from the box plot, smokers tend to be taller, so there seems to be an association with exposure. This is very similar to age, as taller people have larger lungs, which means a larger FEV. In fact, age and height are also correlated, as older people will tend to be taller (at least at the young ages puberty being tested here). Therefore, because age and height are such similar metrics in this case, we will be removing age in our linear regression analysis. 
+
+``` {r plots3}
+ggplot(fev_data, aes( x= sex, y = fev)) +
+  geom_boxplot() +
+    labs(title = "Boxplot of FEV by Sex",
+    x = "Sex",
+    y = "Fev")
+```
+
+### Discussion
+
+We determine that sex is a confounding variable as well. There are more female smokers than male smokers, as seen by the table, which indicates an association with exposure. In addition, while the 25th quartile and median of the box plots are similar, the 75th quartile and max indicate that males have a higher FEV, so there is an effect on the outcome. Males tend to be taller, meaning they will have larger lungs and thus a higher FEV.
+
+Therefore, we need to adjust for the bias that comes with height and sex. As said before, age and height are very similar metrics in this scenario, so we will be removing age from our linear regression analysis to remove redundant information and prevent multicollinearity. 
+
+## 3. Linear Regression
+
+### Objective
+After identifying height as a major confounding variable, we use a multiple linear regression model to estimate the association between smoking and FEV while adjusting for height and sex. This allows us to determine whether smoking is associated with lower lung function after accounting for growth-related differences.
+
+### Model Specification
+
+We fit the following multiple linear regression model:
+
+\[
+\text{FEV} = \beta_0 + \beta_1(\text{Smoke}) + \beta_2(\text{Height}) + \beta_3(\text{Sex}) + \varepsilon
+\]
+
+- **Smoke:** 1 = Yes, 0 = No  
+- **Sex:** 1 = Male, 0 = Female  
+- **Height:** continuous  
+We chose to include height instead of age because the two variables are highly correlated in this dataset. Including both age and height would cause multicollinearity, which makes regression coefficients unstable and harder to interpret. In addition, height is more directly related to lung growth and lung volume than age, making it a more scientifically meaningful predictor for FEV. For these reasons, height was kept as the primary growth-related variable and age was omitted from the final model.
+
+
+### R Code for Fitting the Model
+
+```{r regression}
+# Load data
+fev_data <- read.table("fev.txt", header = TRUE)
+
+# Convert categorical variables
+fev_data$sex <- ifelse(fev_data$sex == 1, 1, 0)         # 1 = Male
+fev_data$smoke <- ifelse(fev_data$smoke == 1, 1, 0)     # 1 = Smoker
+
+# Fit regression model with height (not both age + height)
+model <- lm(fev ~ smoke + height + sex, data = fev_data)
+
+# Show regression summary
+summary(model)
+
+# Compute confidence intervals
+confint(model)
+```
+
+### Interpretation of Regression Results (Focused on Smoking)
+
+From the regression output, the estimated coefficient for smoke is approximately 0.034, 
+with a 95% confidence interval of (-0.081, 0.149). This indicates that after adjusting 
+for height and sex, smokers have on average about 0.03 liters higher FEV than non-smokers, 
+but the confidence interval includes 0, so the effect is not statistically significant.
+
+The coefficient for height is about 0.130, meaning that each additional inch of height 
+is associated with an increase of about 0.13 liters in FEV, holding other variables constant.
+
+The coefficient for sex (1 = male, 0 = female) is about 0.128, indicating that males 
+have on average about 0.13 liters higher FEV than females after adjusting for height 
+and smoking status.
+### Model Diagnostics
+
+To evaluate how well the regression assumptions hold, we generate larger diagnostic plots for clearer interpretation.
+
+```{r diagnostics, fig.width=7, fig.height=7}
+# Larger diagnostic plots for clearer interpretation
+par(mfrow = c(2,2))
+plot(model)
+par(mfrow = c(1,1))
+```
+
+### Discussion
+
+The regression model provides an adjusted estimate of the effect of smoking on FEV after controlling for height and sex. The coefficient for **smoke** is slightly positive (approximately +0.034), but the effect is **not statistically significant** (p = 0.560). This observational association does not establish a causal effect. This means the data does not provide strong evidence that smoking reduces lung function among children once differences in growth (height) and sex are taken into account.
+
+### Model Assumptions
+
+The diagnostic plots reveal several important issues:
+
+- **Normality:**  
+  The Q–Q plot shows clear deviations at the ends, indicating that residuals are not perfectly normally distributed.  
+  → This reduces the reliability of t-statistics and p-values.
+
+- **Constant Variance (Homoscedasticity):**  
+  The Residuals vs Fitted plot shows that the spread of residuals changes across fitted values.  
+  → This violates the constant variance assumption.
+
+- **Linearity:**  
+  The general relationship appears linear, though mild curvature is visible.
+
+- **Influential Points:**  
+  The leverage plot shows no extreme influential observations.
+
+### Overall Interpretation
+
+After adjusting for height (a major confounder) and sex, smoking is **not significantly associated** with FEV in this dataset.  
+The estimated smoking coefficient is slightly positive, with a confidence interval spanning both negative and positive values. Model assumptions and observational confounding limit interpretation.
+
+The unadjusted difference is substantially affected by differences in age and height across smoking groups; this analysis cannot establish a causal effect of smoking.
